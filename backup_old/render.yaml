@@ -1,0 +1,29 @@
+# Render deployment configuration for Nigerian TTS Engine
+services:
+  - type: web
+    name: nigerian-tts-engine
+    env: python
+    plan: free
+    region: oregon  # or singapore for better Nigerian latency
+    branch: main
+    buildCommand: |
+      pip install --upgrade pip
+      pip install wheel setuptools
+      pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+      pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --threads 2 app:app
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DEBUG
+        value: false
+      - key: COQUI_TOS_AGREED
+        value: 1
+      - key: NUMBA_CACHE_DIR
+        value: /tmp
+      - key: TRANSFORMERS_CACHE
+        value: /tmp/transformers
+      - key: HF_DATASETS_CACHE
+        value: /tmp/hf_datasets
