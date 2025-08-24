@@ -1,10 +1,25 @@
 ﻿import os
+import sys
 import asyncio
 import tempfile
+import platform
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
-import edge_tts
+
+import edge_tts  # online (needs internet)
+
+# Optional offline fallback on Windows only
+USE_OFFLINE_FALLBACK = os.getenv("USE_OFFLINE_FALLBACK", "0") == "1"
+WINDOWS = platform.system().lower().startswith("win")
+if USE_OFFLINE_FALLBACK and WINDOWS:
+    try:
+        import pyttsx3  # offline (Windows SAPI5)
+        HAVE_PYTTSX3 = True
+    except Exception:
+        HAVE_PYTTSX3 = False
+else:
+    HAVE_PYTTSX3 = False
 
 app = Flask(__name__)
 CORS(app)
@@ -29,21 +44,6 @@ def _pick_voice(v):
         return VOICE_MAP["nigerian-female"]
     return VOICE_MAP.get(v, VOICE_MAP["nigerian-female"])
 
-async def _tts_to_bytes(text: str, voice_id: str) -> bytes:
-    """
-    Edge TTS default save() returns MP3. We avoid 'format=' to support all versions.
-    """
-    comm = edge_tts.Communicate(text=text, voice=voice_id)
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmpf:
-        out_path = tmpf.name
-    try:
-        await comm.save(out_path)  # no 'format' arg
-        with open(out_path, "rb") as f:
-            return f.read()
-    finally:
-        try: os.remove(out_path)
-        except: pass
-
 def _run_async(coro):
     loop = asyncio.new_event_loop()
     try:
@@ -52,12 +52,47 @@ def _run_async(coro):
     finally:
         loop.close()
 
+async def _edge_tts_bytes_mp3(text: str, voice_id: str) -> bytes:
+    comm = edge_tts.Communicate(text=text, voice=voice_id)
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmpf:
+        out_path = tmpf.name
+    try:
+        # No 'format' arg -> universally supported; default is MP3
+        await comm.save(out_path)
+        with open(out_path, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            os.remove(out_path)
+        except:
+            pass
+
+def _offline_windows_wav(text: str) -> bytes:
+    # Requires Windows + pyttsx3 available (SAPI5)
+    if not (WINDOWS and HAVE_PYTTSX3):
+        raise RuntimeError("Offline fallback not available on this system.")
+    engine = pyttsx3.init()
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmpf:
+        out_path = tmpf.name
+    try:
+        engine.save_to_file(text, out_path)
+        engine.runAndWait()
+        with open(out_path, "rb") as f:
+            return f.read()
+    finally:
+        try:
+            os.remove(out_path)
+        except:
+            pass
+
 @app.get("/health")
 def health():
     return jsonify({
         "status": "healthy",
-        "service": "ODIADEV Nigerian TTS (EdgeTTS MP3)",
+        "service": "ODIADEV Nigerian TTS",
+        "backend": "EdgeTTS (online) + Windows pyttsx3 fallback (offline)",
         "voices_available": list(VOICE_MAP.keys()),
+        "offline_fallback_enabled": USE_OFFLINE_FALLBACK and WINDOWS and HAVE_PYTTSX3,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }), 200
 
@@ -83,13 +118,24 @@ def speak():
     if len(text) > 2000:
         return jsonify({"error": "Text too long (max 2000 chars)"}), 413
 
+    # Prefer online Edge TTS (MP3). If it fails with DNS/connection and fallback is enabled, use offline WAV.
     try:
-        audio = _run_async(_tts_to_bytes(text, voice))
-        resp = Response(audio, mimetype="audio/mpeg")  # MP3
+        audio = _run_async(_edge_tts_bytes_mp3(text, voice))
+        resp = Response(audio, mimetype="audio/mpeg")
         resp.headers["Content-Disposition"] = 'inline; filename="speech.mp3"'
         return resp
     except Exception as e:
-        return jsonify({"error": "TTS failed", "details": str(e)}), 500
+        err_msg = str(e)
+        # If DNS/connectivity issue OR forced fallback, try offline Windows WAV
+        if (("getaddrinfo failed" in err_msg) or ("Cannot connect to host" in err_msg) or USE_OFFLINE_FALLBACK) and (WINDOWS and HAVE_PYTTSX3):
+            try:
+                audio = _offline_windows_wav(text)
+                resp = Response(audio, mimetype="audio/wav")
+                resp.headers["Content-Disposition"] = 'inline; filename="speech.wav"'
+                return resp
+            except Exception as e2:
+                return jsonify({"error": "TTS failed (offline fallback error)", "details": str(e2)}), 500
+        return jsonify({"error": "TTS failed", "details": err_msg}), 500
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "10000"))
