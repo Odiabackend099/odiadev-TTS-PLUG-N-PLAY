@@ -1,0 +1,31 @@
+# Nigerian TTS Engine - Requirements
+# Optimized for Render deployment with Coqui TTS
+
+# Core TTS Framework
+TTS==0.22.0
+torch==2.1.0
+torchaudio==2.1.0
+
+# Audio Processing
+soundfile==0.12.1
+librosa==0.10.1
+scipy==1.11.4
+numpy==1.24.3
+
+# Web Framework  
+Flask==3.0.3
+Flask-CORS==4.0.0
+gunicorn==21.2.0
+
+# Utilities
+Pillow==10.0.1
+requests==2.31.0
+pydub==0.25.1
+webrtcvad==2.0.10
+
+# Optional: Faster inference (if GPU available)
+# onnxruntime==1.16.3
+
+# Development tools
+pytest==7.4.3
+black==23.11.0
