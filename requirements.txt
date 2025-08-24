@@ -1,21 +1,5 @@
-# ODIA Nigerian TTS - PRODUCTION DEPENDENCIES
-# Real TTS generation that works on Render free tier
-
-# Core Web Framework
-Flask==3.0.3
-Flask-CORS==4.0.0
+﻿flask==3.0.3
+flask-cors==4.0.0
 gunicorn==21.2.0
-
-# REAL TTS ENGINE (lightweight, works on 512MB)
-pyttsx3==2.90
-pypiwin32==223; platform_system == "Windows"
-pyobjc==9.0; platform_system == "Darwin"
-
-# Audio processing
-numpy==1.24.3
-
-# HTTP client for future expansions
-requests==2.31.0
-
-# Optional optimization
-Pillow==10.0.1
+edge-tts==6.1.9
+aiohttp==3.9.5

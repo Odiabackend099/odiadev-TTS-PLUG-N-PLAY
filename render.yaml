@@ -1,29 +1,71 @@
-# Render deployment configuration for Nigerian TTS Engine
+# Render.com deployment configuration
+# Optimized for Nigerian TTS API on free tier
+
 services:
   - type: web
-    name: nigerian-tts-engine
-    env: python
+    name: odiadev-nigerian-tts
+    runtime: python
     plan: free
-    region: oregon  # or singapore for better Nigerian latency
+    region: oregon  # Closest to Nigeria with good performance
     branch: main
+    
+    # Optimized build process
     buildCommand: |
-      pip install --upgrade pip
-      pip install wheel setuptools
-      pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cpu
-      pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --timeout 300 --workers 1 --threads 2 app:app
+      echo "🇳🇬 Building ODIADEV Nigerian TTS API..."
+      pip install --upgrade pip setuptools wheel
+      pip install --no-cache-dir -r requirements.txt
+      echo "✅ Build complete - Memory optimized"
+    
+    # Production start command
+    startCommand: >
+      gunicorn 
+      --bind 0.0.0.0:$PORT 
+      --workers 1 
+      --threads 2 
+      --timeout 120 
+      --max-requests 1000 
+      --max-requests-jitter 50 
+      --preload-app 
+      app:app
+    
+    # Health monitoring
     healthCheckPath: /health
+    
+    # Auto-deployment
     autoDeploy: true
+    
+    # Environment variables
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: "3.11"
+      
       - key: DEBUG
-        value: false
-      - key: COQUI_TOS_AGREED
-        value: 1
-      - key: NUMBA_CACHE_DIR
-        value: /tmp
-      - key: TRANSFORMERS_CACHE
-        value: /tmp/transformers
-      - key: HF_DATASETS_CACHE
-        value: /tmp/hf_datasets
+        value: "false"
+      
+      # API Configuration
+      - key: VALID_API_KEYS
+        value: "demo,free,starter_abc123,business_xyz789"
+      
+      - key: API_SECRET
+        value: "your-production-secret-key-change-this"
+      
+      # Memory optimization
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      
+      # TTS Configuration
+      - key: MAX_CACHE_SIZE
+        value: "30"
+      
+      - key: TTS_ENGINE_PRIORITY
+        value: "gtts,pyttsx3"
+      
+      # Performance tuning
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      
+      - key: MALLOC_MMAP_THRESHOLD_
+        value: "131072"
